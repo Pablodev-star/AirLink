@@ -1,0 +1,3 @@
+# Web estatica: finales de linea LF en el repositorio, siempre.
+* text=auto eol=lf
+*.png binary

@@ -1,0 +1,166 @@
+/* AirLink — hoja de estilo unica.
+   Sin dependencias: se carga en un parpadeo incluso con WiFi flojo. */
+
+:root {
+  --bg: #0b0c0f;
+  --surface: #16181e;
+  --surface-2: #1b1e26;
+  --border: #262a33;
+  --text: #e9ebf0;
+  --dim: #98a0b0;
+  --faint: #646c7c;
+  --accent: #6aa9ff;
+  --ok: #5fd39a;
+  --warn: #ffc260;
+  --danger: #ff7b7b;
+  --radius: 18px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "Segoe UI", system-ui, sans-serif;
+  overscroll-behavior: none;
+}
+
+body { display: flex; }
+
+.view { display: none; width: 100%; }
+.view.active { display: block; }
+
+/* ---------------- emparejar ---------------- */
+#view-pair {
+  padding: calc(var(--safe-top) + 26px) 20px calc(var(--safe-bottom) + 28px);
+  max-width: 560px;
+  margin: 0 auto;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.brand { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+.brand h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.4px; }
+.brand .sub { margin: 2px 0 0; color: var(--dim); font-size: 14px; }
+
+.logo {
+  width: 46px; height: 46px; border-radius: 14px; flex: none;
+  background: radial-gradient(circle at 50% 50%,
+              var(--accent) 0 22%, transparent 24%),
+              var(--surface-2);
+  border: 2px solid var(--accent);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+.card h2 { margin: 0 0 8px; font-size: 17px; font-weight: 650; }
+
+.dim { color: var(--dim); }
+.small { font-size: 13px; }
+.center { text-align: center; }
+.error { color: var(--danger); font-size: 14px; margin: 4px 2px 12px; }
+
+.field { display: block; margin-top: 12px; }
+.field > span {
+  display: block; font-size: 12px; font-weight: 650; letter-spacing: 0.6px;
+  text-transform: uppercase; color: var(--faint); margin-bottom: 6px;
+}
+.field input {
+  width: 100%; padding: 13px 14px; font-size: 17px;
+  color: var(--text); background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.field input:focus { outline: none; border-color: var(--accent); }
+
+.row { display: flex; gap: 12px; }
+.grow { flex: 1; }
+
+.check { display: flex; align-items: center; gap: 10px; margin-top: 14px;
+         color: var(--dim); font-size: 14px; }
+.check input { width: 20px; height: 20px; accent-color: var(--accent); }
+
+/* selector segmentado */
+.seg {
+  display: flex; gap: 4px; padding: 4px; margin-bottom: 10px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 13px;
+}
+.seg button {
+  flex: 1; padding: 10px 4px; font-size: 14px; font-weight: 600;
+  color: var(--dim); background: transparent; border: none;
+  border-radius: 10px; font-family: inherit;
+}
+.seg button.on { background: var(--surface); color: var(--text);
+                 box-shadow: 0 1px 3px #0006; }
+
+button.primary, button.ghost {
+  width: 100%; font-family: inherit; font-size: 17px; font-weight: 650;
+  border-radius: 14px; border: 1px solid transparent;
+}
+button.big { padding: 17px; }
+button.primary { background: #fff; color: #0b0c0f; }
+button.primary:active { background: #dfe2e9; }
+button.primary:disabled { background: var(--surface-2); color: var(--faint); }
+button.ghost { background: #ffffff14; color: var(--text);
+               border-color: #ffffff26; }
+button.ghost:active { background: #ffffff22; }
+
+/* ---------------- transmitiendo ---------------- */
+#view-live { position: relative; height: 100%; background: #000; }
+
+#preview {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: cover;
+  transform: scaleX(-1);           /* espejo: te ves como en un espejo */
+}
+
+.hud-top {
+  position: absolute; top: calc(var(--safe-top) + 12px); left: 50%;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 16px; border-radius: 999px;
+  background: #0b0c0fcc; backdrop-filter: blur(14px);
+  border: 1px solid #ffffff1f; font-size: 14px; font-weight: 600;
+  white-space: nowrap;
+}
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warn);
+       box-shadow: 0 0 0 4px #ffc26033; }
+.dot.ok { background: var(--ok); box-shadow: 0 0 0 4px #5fd39a33; }
+.dot.bad { background: var(--danger); box-shadow: 0 0 0 4px #ff7b7b33; }
+
+.hud-bottom {
+  position: absolute; left: 0; right: 0;
+  bottom: calc(var(--safe-bottom) + 14px);
+  padding: 0 18px;
+}
+
+.stats {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 6px; margin-bottom: 14px;
+  padding: 12px 8px; border-radius: 16px;
+  background: #0b0c0fcc; backdrop-filter: blur(14px);
+  border: 1px solid #ffffff1f;
+}
+.stats div { text-align: center; }
+.stats b { display: block; font-size: 17px; font-weight: 680;
+           font-variant-numeric: tabular-nums; }
+.stats span { font-size: 10px; font-weight: 650; letter-spacing: 0.5px;
+              text-transform: uppercase; color: var(--faint); }
+
+#live-hint { margin: 12px 0 0; }
+
+@media (prefers-color-scheme: light) {
+  /* La pantalla del movil suele estar apuntando a una pared: se mantiene
+     oscura siempre para no reflejar luz sobre el usuario. */
+}

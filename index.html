@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0b0c0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AirLink">
+<title>AirLink · cámara para AirTouch</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ 1. emparejar ============ -->
+<section id="view-pair" class="view active">
+  <header class="brand">
+    <div class="logo" aria-hidden="true"></div>
+    <div>
+      <h1>AirLink</h1>
+      <p class="sub">La cámara de AirTouch</p>
+    </div>
+  </header>
+
+  <div class="card">
+    <h2>Conecta con tu PC</h2>
+    <p class="dim">
+      Abre AirTouch en el ordenador, ve a <b>Cámara → Conectar teléfono</b> y
+      escanea el código QR que aparece. O escribe los datos a mano:
+    </p>
+    <label class="field">
+      <span>Dirección del PC</span>
+      <input id="host" type="text" inputmode="decimal" autocomplete="off"
+             autocapitalize="off" spellcheck="false" placeholder="192.168.1.50">
+    </label>
+    <div class="row">
+      <label class="field grow">
+        <span>Puerto</span>
+        <input id="port" type="text" inputmode="numeric" value="8443">
+      </label>
+      <label class="field grow">
+        <span>Código</span>
+        <input id="token" type="text" inputmode="text" autocomplete="off"
+               autocapitalize="characters" spellcheck="false" placeholder="A1B2C3">
+      </label>
+    </div>
+    <label class="check">
+      <input id="remember" type="checkbox" checked>
+      <span>Recordar este PC</span>
+    </label>
+  </div>
+
+  <div class="card">
+    <h2>Calidad</h2>
+    <div class="seg" id="seg-res" role="group" aria-label="Resolución">
+      <button data-v="1280x720">720p</button>
+      <button data-v="1920x1080" class="on">1080p</button>
+      <button data-v="2560x1440">1440p</button>
+      <button data-v="3840x2160">4K</button>
+    </div>
+    <div class="seg" id="seg-fps" role="group" aria-label="Fotogramas">
+      <button data-v="30">30 fps</button>
+      <button data-v="60" class="on">60 fps</button>
+    </div>
+    <div class="seg" id="seg-cam" role="group" aria-label="Cámara">
+      <button data-v="environment" class="on">Trasera</button>
+      <button data-v="user">Frontal</button>
+    </div>
+    <p class="dim small">
+      La cámara trasera da mucha más calidad y llega a 4K60. Coloca el móvil
+      con la pantalla mirando hacia la pared.
+    </p>
+  </div>
+
+  <button id="btn-connect" class="primary big">Conectar</button>
+  <p id="pair-error" class="error" hidden></p>
+  <p class="dim small center">
+    Todo el vídeo viaja directo por tu WiFi, del móvil al PC. No pasa por
+    ningún servidor.
+  </p>
+</section>
+
+<!-- ============ 2. transmitiendo ============ -->
+<section id="view-live" class="view">
+  <video id="preview" playsinline autoplay muted></video>
+
+  <div class="hud-top">
+    <span id="dot" class="dot"></span>
+    <span id="state">Conectando…</span>
+  </div>
+
+  <div class="hud-bottom">
+    <div class="stats">
+      <div><b id="s-res">—</b><span>resolución</span></div>
+      <div><b id="s-fps">—</b><span>fps</span></div>
+      <div><b id="s-kbps">—</b><span>Mbps</span></div>
+      <div><b id="s-rtt">—</b><span>ms</span></div>
+    </div>
+    <button id="btn-stop" class="ghost big">Desconectar</button>
+    <p class="dim small center" id="live-hint">
+      Deja esta pantalla abierta. Si sales de la app, iOS apaga la cámara.
+    </p>
+  </div>
+</section>
+
+<script src="app.js"></script>
+</body>
+</html>

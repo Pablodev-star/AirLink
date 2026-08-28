@@ -1,0 +1,13 @@
+# sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# editores
+.vscode/
+.idea/
+*.swp
+
+# nada de node aqui: este proyecto no tiene dependencias a proposito
+node_modules/
+package-lock.json
