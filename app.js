@@ -21,11 +21,14 @@ const LS = 'airlink.settings.v1';
 const state = {
   pc: null,
   ws: null,
+  sender: null,
   stream: null,
   wakeLock: null,
   statsTimer: null,
   reconnect: 0,
   stopping: false,
+  everOpen: false,
+  fatal: null,
   lastBytes: 0,
   lastStatsAt: 0,
 };
@@ -155,17 +158,24 @@ function signalUrl() {
 }
 
 async function connect() {
-  settings.host = $('host').value.trim();
-  settings.port = $('port').value.trim() || '8443';
-  settings.token = $('token').value.trim();
+  // Normalizar lo escrito a mano: es muy fácil colar un "https://", una barra
+  // al final o el código en minúsculas, y el servidor lo rechazaría sin que se
+  // entienda por qué.
+  settings.host = $('host').value.trim()
+    .replace(/^\w+:\/\//, '').replace(/\/.*$/, '').replace(/:\d+$/, '');
+  settings.port = ($('port').value.trim() || '8443').replace(/\D/g, '') || '8443';
+  settings.token = $('token').value.trim().toUpperCase().replace(/\s+/g, '');
   settings.remember = $('remember').checked;
+  applySettingsToForm();
 
   if (!settings.host) return fail('Falta la dirección del PC.');
   if (!settings.token) return fail('Falta el código de emparejamiento.');
   saveSettings();
 
-  $('pair-error').hidden = true;
-  $('btn-connect').disabled = true;
+  $("pair-error").hidden = true;
+  state.fatal = null;
+  state.everOpen = false;
+  $("btn-connect").disabled = true;
   $('btn-connect').textContent = 'Pidiendo la cámara…';
 
   try {
@@ -209,6 +219,7 @@ function openSignal() {
   state.ws = ws;
 
   ws.onopen = () => {
+    state.everOpen = true;
     ws.send(JSON.stringify({
       type: 'hello',
       device: navigator.userAgent,
@@ -224,12 +235,18 @@ function openSignal() {
 
     if (msg.type === 'answer') {
       await state.pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp });
+      // ahora sí: con la negociación cerrada, los parámetros se respetan
+      await applyEncoding();
       setState('Transmitiendo', 'ok');
       state.reconnect = 0;
     } else if (msg.type === 'ice' && msg.candidate) {
       try { await state.pc.addIceCandidate(msg.candidate); } catch (_) {}
     } else if (msg.type === 'error') {
-      setState(msg.message || 'El PC ha rechazado la conexión', 'bad');
+      // el PC ha respondido pero nos rechaza: no tiene sentido reintentar
+      state.fatal = msg.message || 'El PC ha rechazado la conexión';
+      setState(state.fatal, 'bad');
+      $('live-hint').textContent =
+        'Vuelve atrás y escanea otra vez el QR: el código puede haber cambiado.';
       teardown(false);
     } else if (msg.type === 'bye') {
       setState('El PC ha cerrado la sesión', 'bad');
@@ -237,8 +254,22 @@ function openSignal() {
     }
   };
 
-  ws.onclose = () => {
-    if (state.stopping) return;
+  ws.onclose = (ev) => {
+    if (state.stopping || state.fatal) return;
+    if (!state.everOpen) {
+      // Nunca llegó a abrirse. La causa casi siempre es que el certificado del
+      // PC no está aceptado en ESTE contexto: pasa al abrir la app desde la
+      // pantalla de inicio o desde la copia de GitHub Pages, porque la
+      // excepción que aceptaste en Safari no se hereda.
+      state.fatal = 'No se pudo abrir la conexión con el PC';
+      setState(state.fatal, 'bad');
+      $('live-hint').innerHTML =
+        'Abre la dirección <b>https://' + settings.host + ':' + settings.port +
+        '</b> en <b>Safari</b> y acepta el aviso del certificado. Después vuelve ' +
+        'aquí. (Escanear el QR desde AirTouch hace las dos cosas de una vez.)';
+      teardown(false);
+      return;
+    }
     setState('Conexión perdida, reintentando…', 'bad');
     retry();
   };
@@ -269,20 +300,14 @@ async function startWebrtc() {
   state.pc = pc;
 
   const track = state.stream.getVideoTracks()[0];
-  const sender = pc.addTrack(track, state.stream);
 
-  // Calidad: nada de bajar resolucion para ahorrar ancho de banda. En una LAN
-  // sobra, y aqui la nitidez es justo lo que hace falta.
-  try {
-    const p = sender.getParameters();
-    p.encodings = [{
-      maxBitrate: 24_000_000,
-      maxFramerate: Number(settings.fps),
-      degradationPreference: 'maintain-resolution',
-    }];
-    p.degradationPreference = 'maintain-resolution';
-    await sender.setParameters(p);
-  } catch (_) { /* si el navegador no deja, se queda en automatico */ }
+  // Pista de contenido: 'detail' le dice al codificador que prime la NITIDEZ
+  // sobre la fluidez. Por defecto una cámara usa 'motion', que difumina los
+  // detalles finos al moverse — justo los dedos que hay que detectar.
+  try { track.contentHint = 'detail'; } catch (_) {}
+
+  const sender = pc.addTrack(track, state.stream);
+  state.sender = sender;
 
   pc.onicecandidate = (e) => {
     if (e.candidate && state.ws && state.ws.readyState === 1) {
@@ -300,16 +325,78 @@ async function startWebrtc() {
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-  state.ws.send(JSON.stringify({ type: 'offer', sdp: offer.sdp }));
+  state.ws.send(JSON.stringify({ type: 'offer', sdp: withBandwidth(offer.sdp) }));
 
   startStats();
+}
+
+/*
+ * Sube el techo de ancho de banda anunciado en el SDP.
+ *
+ * Sin esto, el control de congestión arranca conservador y tarda mucho (o
+ * nunca) en subir, aunque estemos en una LAN con 100 veces ese ancho. El
+ * resultado es una imagen blanda y con artefactos justo donde importa.
+ */
+function withBandwidth(sdp, kbps = 20000) {
+  const lines = sdp.split('\r\n');
+  const out = [];
+  let inVideo = false;
+  let placed = false;
+
+  for (const line of lines) {
+    if (line.startsWith('m=')) {
+      inVideo = line.startsWith('m=video');
+      placed = false;
+    }
+    // en SDP el orden es m=, i=, c=, b=  — así que va justo tras c=
+    if (inVideo && !placed && out.length && out[out.length - 1].startsWith('c=')) {
+      out.push('b=AS:' + kbps);
+      out.push('b=TIAS:' + kbps * 1000);
+      placed = true;
+    }
+    if (line.startsWith('b=') && inVideo) continue;   // fuera los antiguos
+    out.push(line);
+  }
+  return out.join('\r\n');
+}
+
+/*
+ * Fija bitrate y framerate en el emisor.
+ *
+ * Tiene que hacerse DESPUÉS de la negociación: si se hace antes, al aplicar la
+ * respuesta el navegador reconstruye las codificaciones y se pierde lo pedido.
+ * Safari además las reajusta por su cuenta, así que se vuelve a aplicar cada
+ * pocos segundos.
+ */
+async function applyEncoding() {
+  const sender = state.sender;
+  if (!sender || !sender.getParameters) return;
+  try {
+    const p = sender.getParameters();
+    if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+    for (const e of p.encodings) {
+      e.maxBitrate = 20_000_000;
+      e.maxFramerate = Number(settings.fps);
+      e.scaleResolutionDownBy = 1;
+      e.active = true;
+      e.networkPriority = 'high';
+      e.priority = 'high';
+    }
+    // en una LAN sobra ancho: nunca bajar resolución para ahorrar
+    p.degradationPreference = 'maintain-resolution';
+    await sender.setParameters(p);
+  } catch (_) { /* el navegador no lo permite: se queda en automático */ }
 }
 
 // ---------------------------------------------------------------- metricas
 function startStats() {
   stopStats();
+  let tick = 0;
   state.statsTimer = setInterval(async () => {
     if (!state.pc) return;
+    // Safari reajusta las codificaciones por su cuenta cada cierto tiempo y
+    // se lleva por delante el bitrate pedido. Se vuelve a poner.
+    if (++tick % 4 === 0) applyEncoding();
     const info = describeTrack();
     if (info.w) $('s-res').textContent = info.w + '×' + info.h;
 
@@ -341,6 +428,16 @@ function startStats() {
     $('s-fps').textContent = fps || '—';
     $('s-kbps').textContent = mbps ? mbps.toFixed(1) : '—';
     $('s-rtt').textContent = rtt || '—';
+
+    // Solo el emisor sabe cuánto ocupa el vídeo comprimido: el PC recibe
+    // frames ya decodificados. Se lo mandamos para que pueda avisar si la
+    // calidad no da para detectar bien los dedos.
+    if (state.ws && state.ws.readyState === 1) {
+      state.ws.send(JSON.stringify({
+        type: 'stats', fps, mbps, rtt,
+        width: info.w || 0, height: info.h || 0,
+      }));
+    }
   }, 1000);
 }
 
